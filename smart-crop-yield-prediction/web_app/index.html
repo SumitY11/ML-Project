@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AgriSmart - Crop Yield & Climate Intelligence Dashboard</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Stylesheet -->
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="brand">
+                <div class="brand-icon">🌾</div>
+                <div class="brand-text">
+                    <h2>AgriSmart</h2>
+                    <span>AI Yield Intelligence</span>
+                </div>
+            </div>
+
+            <nav class="nav-menu">
+                <button class="nav-btn active" data-tab="predictor">
+                    <span class="icon">🌱</span> Yield Predictor
+                </button>
+                <button class="nav-btn" data-tab="analytics">
+                    <span class="icon">📊</span> Historical Analytics
+                </button>
+                <button class="nav-btn" data-tab="scenario">
+                    <span class="icon">⚖️</span> Scenario Simulator
+                </button>
+                <button class="nav-btn" data-tab="agronomy">
+                    <span class="icon">💡</span> Agronomy Guide
+                </button>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div class="status-indicator">
+                    <span class="dot online"></span>
+                    <span>ML Pipeline Active</span>
+                </div>
+                <p class="version">v2.4 - Scikit & XGBoost</p>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Top Header -->
+            <header class="top-header">
+                <div class="header-titles">
+                    <h1 id="page-title">Yield Prediction & Climate Risk</h1>
+                    <p id="page-subtitle">Real-time machine learning prediction based on regional rainfall & temp patterns</p>
+                </div>
+                <div class="header-actions">
+                    <div class="badge-pill">
+                        <span class="icon">📍</span> Region: <strong id="header-region">National Data</strong>
+                    </div>
+                </div>
+            </header>
+
+            <!-- TAB 1: YIELD PREDICTOR -->
+            <section id="tab-predictor" class="tab-content active">
+                <div class="grid-layout">
+                    <!-- Form Column -->
+                    <div class="glass-card form-card">
+                        <div class="card-header">
+                            <h3>🌱 Agricultural Inputs</h3>
+                            <span class="chip">Interactive</span>
+                        </div>
+                        
+                        <form id="prediction-form">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="crop-select">Target Crop</label>
+                                    <select id="crop-select" required class="custom-select">
+                                        <option value="">Loading crops...</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="state-select">State / Territory</label>
+                                    <select id="state-select" required class="custom-select">
+                                        <option value="">Loading states...</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="season-select">Crop Season</label>
+                                    <select id="season-select" required class="custom-select">
+                                        <option value="">Loading seasons...</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="year-select">Crop Year</label>
+                                    <select id="year-select" required class="custom-select">
+                                        <!-- Populated dynamically -->
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="land-area">Land Area (Hectares)</label>
+                                <div class="input-with-unit">
+                                    <input type="number" id="land-area" value="2.5" min="0.1" step="0.5" required>
+                                    <span class="unit">Ha</span>
+                                </div>
+                            </div>
+
+                            <div class="divider"></div>
+
+                            <h4>🌿 Climate & Soil Input Levels</h4>
+
+                            <div class="form-group">
+                                <div class="label-with-value">
+                                    <label>Expected Rainfall</label>
+                                    <span id="rain-label-val" class="level-val">Normal</span>
+                                </div>
+                                <div class="segmented-control">
+                                    <input type="radio" name="rainfall_level" id="rf-low" value="Low">
+                                    <label for="rf-low">Low</label>
+                                    
+                                    <input type="radio" name="rainfall_level" id="rf-normal" value="Normal" checked>
+                                    <label for="rf-normal">Normal</label>
+                                    
+                                    <input type="radio" name="rainfall_level" id="rf-high" value="High">
+                                    <label for="rf-high">High</label>
+                                </div>
+                            </div>
+
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>Fertilizer Level</label>
+                                    <select id="fert-level" class="custom-select">
+                                        <option value="Low">Low</option>
+                                        <option value="Medium" selected>Medium</option>
+                                        <option value="High">High</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Pesticide Level</label>
+                                    <select id="pest-level" class="custom-select">
+                                        <option value="Low">Low</option>
+                                        <option value="Medium" selected>Medium</option>
+                                        <option value="High">High</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <button type="submit" class="btn-primary" id="btn-predict">
+                                <span>✨ Calculate Predicted Yield</span>
+                            </button>
+                        </form>
+                    </div>
+
+                    <!-- Output Column -->
+                    <div class="output-column">
+                        <!-- Key Metrics Row -->
+                        <div class="metrics-grid">
+                            <div class="metric-card glass-card">
+                                <div class="metric-icon green">🌾</div>
+                                <div class="metric-info">
+                                    <span class="metric-title">Predicted Yield</span>
+                                    <h2 id="metric-yield">--</h2>
+                                    <span class="metric-unit">Tonnes / Hectare</span>
+                                </div>
+                            </div>
+
+                            <div class="metric-card glass-card">
+                                <div class="metric-icon blue">📦</div>
+                                <div class="metric-info">
+                                    <span class="metric-title">Total Production</span>
+                                    <h2 id="metric-total">--</h2>
+                                    <span class="metric-unit">Estimated Harvest (Tonnes)</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Climate Risk Status Card -->
+                        <div class="glass-card risk-card">
+                            <div class="card-header">
+                                <h3>⚠️ Climate Risk & Anomaly Status</h3>
+                                <span id="risk-badge" class="risk-badge badge-low">Calculating...</span>
+                            </div>
+                            
+                            <div class="temp-display">
+                                <span class="temp-icon">🌡️</span>
+                                <div>
+                                    <span class="temp-label">Estimated Seasonal Temp:</span>
+                                    <strong id="seasonal-temp">-- °C</strong>
+                                </div>
+                            </div>
+
+                            <div class="recommendation-box">
+                                <h4>💡 Agronomic Advisory:</h4>
+                                <p id="advisory-text">Select parameters and click calculate to view intelligent climate risk advisory.</p>
+                            </div>
+                        </div>
+
+                        <!-- Factor Breakdown Chart -->
+                        <div class="glass-card chart-card">
+                            <h3>📊 Feature Impact & Parameters</h3>
+                            <div class="chart-container">
+                                <canvas id="factorChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB 2: HISTORICAL ANALYTICS -->
+            <section id="tab-analytics" class="tab-content">
+                <div class="filter-bar glass-card">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="analytics-crop">Crop</label>
+                            <select id="analytics-crop" class="custom-select"></select>
+                        </div>
+                        <div class="form-group">
+                            <label for="analytics-state">State</label>
+                            <select id="analytics-state" class="custom-select">
+                                <option value="All">All States (National Average)</option>
+                            </select>
+                        </div>
+                        <div class="form-group btn-align">
+                            <button class="btn-secondary" id="btn-load-analytics"><span>🔄 Update Visuals</span></button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid-2col">
+                    <div class="glass-card">
+                        <h3>📈 Historical Yield Progression</h3>
+                        <div class="chart-container">
+                            <canvas id="yieldTrendChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="glass-card">
+                        <h3>🌧️ Annual Rainfall Pattern</h3>
+                        <div class="chart-container">
+                            <canvas id="rainfallTrendChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="glass-card margin-top">
+                    <h3>🏆 Top Yielding States for Selected Crop</h3>
+                    <div class="chart-container">
+                        <canvas id="topStatesChart"></canvas>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB 3: SCENARIO SIMULATOR -->
+            <section id="tab-scenario" class="tab-content">
+                <div class="grid-2col">
+                    <div class="glass-card">
+                        <h3 class="title-a">Option A: Standard Management</h3>
+                        <form id="scenario-a-form">
+                            <div class="form-group">
+                                <label>Crop</label>
+                                <select id="sc-crop-a" class="custom-select"></select>
+                            </div>
+                            <div class="form-group">
+                                <label>Rainfall Level</label>
+                                <select id="sc-rain-a" class="custom-select">
+                                    <option value="Low">Low</option>
+                                    <option value="Normal" selected>Normal</option>
+                                    <option value="High">High</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Fertilizer Level</label>
+                                <select id="sc-fert-a" class="custom-select">
+                                    <option value="Low">Low</option>
+                                    <option value="Medium" selected>Medium</option>
+                                    <option value="High">High</option>
+                                </select>
+                            </div>
+                        </form>
+                    </div>
+
+                    <div class="glass-card">
+                        <h3 class="title-b">Option B: Optimized Management</h3>
+                        <form id="scenario-b-form">
+                            <div class="form-group">
+                                <label>Crop</label>
+                                <select id="sc-crop-b" class="custom-select"></select>
+                            </div>
+                            <div class="form-group">
+                                <label>Rainfall Level</label>
+                                <select id="sc-rain-b" class="custom-select">
+                                    <option value="Low">Low</option>
+                                    <option value="Normal">Normal</option>
+                                    <option value="High" selected>High</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Fertilizer Level</label>
+                                <select id="sc-fert-b" class="custom-select">
+                                    <option value="Low">Low</option>
+                                    <option value="Medium">Medium</option>
+                                    <option value="High" selected>High</option>
+                                </select>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <div class="center-btn">
+                    <button class="btn-primary" id="btn-run-scenario"><span>⚖️ Compare Scenarios</span></button>
+                </div>
+
+                <div class="glass-card margin-top">
+                    <h3>📊 Side-by-Side Yield Comparison</h3>
+                    <div class="comparison-metrics">
+                        <div class="comp-box">
+                            <span>Option A Yield</span>
+                            <h3 id="comp-yield-a">-- T/ha</h3>
+                        </div>
+                        <div class="comp-box highlight">
+                            <span>Option B Yield</span>
+                            <h3 id="comp-yield-b">-- T/ha</h3>
+                        </div>
+                        <div class="comp-box">
+                            <span>Yield Difference</span>
+                            <h3 id="comp-diff">-- %</h3>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="scenarioChart"></canvas>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB 4: AGRONOMY GUIDE -->
+            <section id="tab-agronomy" class="tab-content">
+                <div class="grid-2col">
+                    <div class="glass-card guide-card">
+                        <div class="guide-icon">🌱</div>
+                        <h3>Soil Health & Nitrogen Efficiency</h3>
+                        <p>Optimizing Nitrogen-Phosphorus-Potassium ratios prevents soil degradation and increases fertilizer recovery by up to 25%.</p>
+                        <ul>
+                            <li>Soil pH balancing with lime or gypsum</li>
+                            <li>Targeted foliar sprays during tillering</li>
+                            <li>Leguminous crop rotation for natural nitrogen fixation</li>
+                        </ul>
+                    </div>
+
+                    <div class="glass-card guide-card">
+                        <div class="guide-icon">🌧️</div>
+                        <h3>Climate & Flood-Drought Management</h3>
+                        <p>Mitigate volatile monsoon seasons through adaptive field practices and water retention techniques.</p>
+                        <ul>
+                            <li>Drip irrigation to buffer dry spells</li>
+                            <li>Field bunding and runoff harvesting ponds</li>
+                            <li>Short-duration flood-tolerant seed varieties</li>
+                        </ul>
+                    </div>
+
+                    <div class="glass-card guide-card">
+                        <div class="guide-icon">🧪</div>
+                        <h3>Integrated Pest & Disease Control</h3>
+                        <p>Combine biological control with minimal chemical interventions to protect beneficial soil micro-organisms.</p>
+                        <ul>
+                            <li>Neem-based organic sprays for early pest stages</li>
+                            <li>Pheromone traps for moth and worm monitoring</li>
+                            <li>Clean weeding during initial crop germination</li>
+                        </ul>
+                    </div>
+
+                    <div class="glass-card guide-card">
+                        <div class="guide-icon">🌾</div>
+                        <h3>Post-Harvest Storage & Quality</h3>
+                        <p>Prevent moisture degradation and fungal growth during storage to retain market value.</p>
+                        <ul>
+                            <li>Moisture content reduction to below 12% before bagging</li>
+                            <li>Hermetic storage bags for pest prevention</li>
+                            <li>Cool, ventilated warehouse positioning</li>
+                        </ul>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- JavaScript -->
+    <script src="app.js"></script>
+</body>
+</html>
