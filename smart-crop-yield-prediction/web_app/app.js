@@ -101,10 +101,10 @@ document.addEventListener("DOMContentLoaded", () => {
         populateSelect(cropSelect, data.crops, "Rice");
         populateSelect(stateSelect, data.states, "Punjab");
         populateSelect(seasonSelect, data.seasons, "Kharif");
-        
+
         // Year Select
         yearSelect.innerHTML = "";
-        const years = data.years && data.years.length > 0 ? data.years : Array.from({length: 20}, (_, i) => 2000 + i);
+        const years = data.years && data.years.length > 0 ? data.years : Array.from({ length: 20 }, (_, i) => 2000 + i);
         years.forEach(yr => {
             const opt = document.createElement("option");
             opt.value = yr;
@@ -311,7 +311,7 @@ document.addEventListener("DOMContentLoaded", () => {
             renderAnalyticsCharts(data);
         } catch (e) {
             // Offline analytics mockup
-            const years = Array.from({length: 15}, (_, i) => 2002 + i);
+            const years = Array.from({ length: 15 }, (_, i) => 2002 + i);
             const yields = years.map((_, i) => (1.8 + i * 0.08 + Math.random() * 0.4).toFixed(2));
             const rainfall = years.map(() => Math.floor(1100 + Math.random() * 600));
             renderAnalyticsCharts({
