@@ -171,6 +171,24 @@ document.addEventListener("DOMContentLoaded", () => {
             rainfall_level, fertilizer_level, pesticide_level
         };
 
+        const btnPredict = document.getElementById("btn-predict");
+        const statusBadge = document.getElementById("model-source-badge");
+        const modelSubtext = document.getElementById("model-subtext");
+        const latencyTag = document.getElementById("inference-latency-tag");
+        const pulseDot = document.getElementById("status-pulse-dot");
+
+        if (btnPredict) {
+            btnPredict.disabled = true;
+            btnPredict.classList.add("computing");
+            btnPredict.innerHTML = `<span>🔄 Computing ML Model in Background...</span>`;
+        }
+
+        if (latencyTag) {
+            latencyTag.textContent = "⚡ Running Inference...";
+        }
+
+        const clientStart = performance.now();
+
         try {
             const response = await fetch(`${API_BASE}/predict`, {
                 method: "POST",
@@ -180,11 +198,32 @@ document.addEventListener("DOMContentLoaded", () => {
 
             if (!response.ok) throw new Error("API Predict Error");
             const result = await response.json();
+            const clientLatency = Math.round(performance.now() - clientStart);
+
             updatePredictionUI(result);
+
+            if (statusBadge) statusBadge.textContent = result.engine || "ML Engine: RandomForest Pipeline";
+            if (modelSubtext) modelSubtext.textContent = `Inference #${result.inference_id || 1} computed in background at ${new Date().toLocaleTimeString()}`;
+            if (latencyTag) latencyTag.textContent = `⚡ ${result.latency_ms || clientLatency} ms`;
+            if (pulseDot) pulseDot.style.backgroundColor = "#10b981";
+
+            // Update sidebar stats
+            checkModelStatus();
         } catch (error) {
             console.warn("Using offline prediction engine:", error);
             const offlineResult = generateOfflinePrediction(payload);
             updatePredictionUI(offlineResult);
+
+            if (statusBadge) statusBadge.textContent = "Offline Fallback Engine";
+            if (modelSubtext) modelSubtext.textContent = "Backend offline — computed locally via quantile mapping";
+            if (latencyTag) latencyTag.textContent = "⚠️ Offline";
+            if (pulseDot) pulseDot.style.backgroundColor = "#f59e0b";
+        } finally {
+            if (btnPredict) {
+                btnPredict.disabled = false;
+                btnPredict.classList.remove("computing");
+                btnPredict.innerHTML = `<span>✨ Calculate Predicted Yield</span>`;
+            }
         }
     }
 
@@ -470,6 +509,27 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     });
 
+    // Check background model status
+    async function checkModelStatus() {
+        try {
+            const res = await fetch(`${API_BASE}/model-status`);
+            if (res.ok) {
+                const data = await res.json();
+                const statusLabel = document.querySelector(".sidebar-footer .status-indicator span:last-child");
+                if (statusLabel) {
+                    statusLabel.textContent = `ML Pipeline Active (${data.total_inferences_served} served)`;
+                }
+                const modelBadge = document.getElementById("model-source-badge");
+                if (modelBadge && modelBadge.textContent.includes("RandomForest")) {
+                    modelBadge.textContent = `ML Engine: ${data.algorithm}`;
+                }
+            }
+        } catch (e) {
+            console.warn("Model health endpoint check:", e);
+        }
+    }
+
     // Initialize
     loadOptions();
+    checkModelStatus();
 });

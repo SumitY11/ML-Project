@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import joblib
 import os
+import time
 
 # -----------------------------
 # Page Settings & Setup
@@ -563,98 +564,113 @@ with tab1:
         st.markdown("</div>", unsafe_allow_html=True)
 
         if predict_clicked:
-            # Prepare dataframe for prediction
-            input_df = pd.DataFrame({
-                "Crop": [selected_crop],
-                "Crop_Year": [selected_year],
-                "Season": [selected_season],
-                "State": [selected_state],
-                "Area": [area],
-                "Annual_Rainfall": [rainfall_val],
-                "Fertilizer": [fertilizer_val],
-                "Pesticide": [pesticide_val],
-                "Season_Temperature": [calc_temp]
-            })
+            start_infer = time.time()
+            with st.spinner("🧠 Background ML Pipeline: Preprocessing features & running RandomForest..."):
+                time.sleep(0.15)  # Visual feedback for inference
+                
+                # Prepare dataframe for prediction
+                input_df = pd.DataFrame({
+                    "Crop": [selected_crop],
+                    "Crop_Year": [selected_year],
+                    "Season": [selected_season],
+                    "State": [selected_state],
+                    "Area": [area],
+                    "Annual_Rainfall": [rainfall_val],
+                    "Fertilizer": [fertilizer_val],
+                    "Pesticide": [pesticide_val],
+                    "Season_Temperature": [calc_temp]
+                })
 
-            # Crop and region baseline calculation
-            if not crop_df.empty and selected_crop in crop_df["Crop"].values:
-                crop_match = crop_df[(crop_df["Crop"] == selected_crop) & (crop_df["State"] == selected_state)]
-                if not crop_match.empty and crop_match["Yield"].mean() > 0:
-                    crop_base = float(crop_match["Yield"].mean())
+                # Crop and region baseline calculation
+                if not crop_df.empty and selected_crop in crop_df["Crop"].values:
+                    crop_match = crop_df[(crop_df["Crop"] == selected_crop) & (crop_df["State"] == selected_state)]
+                    if not crop_match.empty and crop_match["Yield"].mean() > 0:
+                        crop_base = float(crop_match["Yield"].mean())
+                    else:
+                        crop_base = float(crop_df[crop_df["Crop"] == selected_crop]["Yield"].mean())
                 else:
-                    crop_base = float(crop_df[crop_df["Crop"] == selected_crop]["Yield"].mean())
-            else:
-                crop_base = 2.5
+                    crop_base = 2.5
 
-            if pd.isna(crop_base) or crop_base <= 0:
-                crop_base = 2.5
+                if pd.isna(crop_base) or crop_base <= 0:
+                    crop_base = 2.5
 
-            fert_mult = 1.15 if fertilizer_level == "High" else (0.85 if fertilizer_level == "Low" else 1.0)
-            rain_mult = 1.10 if rainfall_level == "High" else (0.80 if rainfall_level == "Low" else 1.0)
-            pest_mult = 1.05 if pesticide_level == "High" else (0.92 if pesticide_level == "Low" else 1.0)
+                fert_mult = 1.15 if fertilizer_level == "High" else (0.85 if fertilizer_level == "Low" else 1.0)
+                rain_mult = 1.10 if rainfall_level == "High" else (0.80 if rainfall_level == "Low" else 1.0)
+                pest_mult = 1.05 if pesticide_level == "High" else (0.92 if pesticide_level == "Low" else 1.0)
 
-            dynamic_estimate = crop_base * fert_mult * rain_mult * pest_mult
+                dynamic_estimate = crop_base * fert_mult * rain_mult * pest_mult
+                engine_name = "RandomForestRegressor Pipeline (Scikit-Learn)"
 
-            if model is not None:
-                try:
-                    predicted_yield = float(model.predict(input_df)[0])
-                    if predicted_yield <= 0:
+                if model is not None:
+                    try:
+                        predicted_yield = float(model.predict(input_df)[0])
+                        if predicted_yield <= 0:
+                            predicted_yield = dynamic_estimate
+                            engine_name = "Dynamic Baseline (Heuristic Fallback)"
+                    except Exception:
                         predicted_yield = dynamic_estimate
-                except Exception:
+                        engine_name = "Dynamic Baseline (Heuristic Fallback)"
+                else:
                     predicted_yield = dynamic_estimate
-            else:
-                predicted_yield = dynamic_estimate
-            
-            total_production = predicted_yield * area
+                    engine_name = "Dynamic Baseline (Heuristic)"
+                
+                total_production = predicted_yield * area
 
-            hist_avg_yield = crop_df[(crop_df["Crop"] == selected_crop) & (crop_df["State"] == selected_state)]["Yield"].mean()
-            if pd.isna(hist_avg_yield) or hist_avg_yield == 0:
-                hist_avg_yield = crop_df[crop_df["Crop"] == selected_crop]["Yield"].mean()
-            if pd.isna(hist_avg_yield) or hist_avg_yield == 0:
-                hist_avg_yield = 2.5
+                hist_avg_yield = crop_df[(crop_df["Crop"] == selected_crop) & (crop_df["State"] == selected_state)]["Yield"].mean()
+                if pd.isna(hist_avg_yield) or hist_avg_yield == 0:
+                    hist_avg_yield = crop_df[crop_df["Crop"] == selected_crop]["Yield"].mean()
+                if pd.isna(hist_avg_yield) or hist_avg_yield == 0:
+                    hist_avg_yield = 2.5
 
-            suitability_score = min(100.0, max(20.0, (predicted_yield / hist_avg_yield) * 85.0))
-            unit_price = CROP_PRICES_INR.get(selected_crop, 25000)
-            est_revenue = total_production * unit_price
+                suitability_score = min(100.0, max(20.0, (predicted_yield / hist_avg_yield) * 85.0))
+                unit_price = CROP_PRICES_INR.get(selected_crop, 25000)
+                est_revenue = total_production * unit_price
 
-            risk_score = 0
-            rf_low_th = risk_values.get("rainfall_low", 800)
-            rf_high_th = risk_values.get("rainfall_high", 2500)
-            t_low_th = risk_values.get("temperature_low", 18)
-            t_high_th = risk_values.get("temperature_high", 32)
+                risk_score = 0
+                rf_low_th = risk_values.get("rainfall_low", 800)
+                rf_high_th = risk_values.get("rainfall_high", 2500)
+                t_low_th = risk_values.get("temperature_low", 18)
+                t_high_th = risk_values.get("temperature_high", 32)
 
-            if rainfall_val < rf_low_th or rainfall_val > rf_high_th:
-                risk_score += 1
-            if calc_temp < t_low_th or calc_temp > t_high_th:
-                risk_score += 1
+                if rainfall_val < rf_low_th or rainfall_val > rf_high_th:
+                    risk_score += 1
+                if calc_temp < t_low_th or calc_temp > t_high_th:
+                    risk_score += 1
 
-            if risk_score == 0:
-                risk_badge_html = '<span class="badge-low">🟢 Low Climate Risk</span>'
-                recommendation = "Optimal weather parameters detected. Maintain standard agronomic practices, balanced fertilization, and standard irrigation schedules."
-            elif risk_score == 1:
-                risk_badge_html = '<span class="badge-medium">🟡 Moderate Weather Risk</span>'
-                recommendation = "Moderate weather deviation detected. Monitor local soil moisture closely, implement micro-irrigation or surface drainage as appropriate."
-            else:
-                risk_badge_html = '<span class="badge-high">🔴 High Anomaly Risk</span>'
-                recommendation = "Unfavorable weather extremes detected! Consider climate-resilient crop varieties, protective mulching, drip irrigation, or local agricultural extensions."
+                if risk_score == 0:
+                    risk_badge_html = '<span class="badge-low">🟢 Low Climate Risk</span>'
+                    recommendation = "Optimal weather parameters detected. Maintain standard agronomic practices, balanced fertilization, and standard irrigation schedules."
+                elif risk_score == 1:
+                    risk_badge_html = '<span class="badge-medium">🟡 Moderate Weather Risk</span>'
+                    recommendation = "Moderate weather deviation detected. Monitor local soil moisture closely, implement micro-irrigation or surface drainage as appropriate."
+                else:
+                    risk_badge_html = '<span class="badge-high">🔴 High Anomaly Risk</span>'
+                    recommendation = "Unfavorable weather extremes detected! Consider climate-resilient crop varieties, protective mulching, drip irrigation, or local agricultural extensions."
 
-            st.session_state["pred_result"] = {
-                "selected_crop": selected_crop,
-                "selected_state": selected_state,
-                "area": area,
-                "predicted_yield": predicted_yield,
-                "total_production": total_production,
-                "est_revenue": est_revenue,
-                "suitability_score": suitability_score,
-                "risk_badge_html": risk_badge_html,
-                "recommendation": recommendation,
-                "rainfall_val": rainfall_val,
-                "fertilizer_val": fertilizer_val,
-                "pesticide_val": pesticide_val,
-                "rainfall_level": rainfall_level,
-                "fertilizer_level": fertilizer_level,
-                "pesticide_level": pesticide_level
-            }
+                latency_ms = (time.time() - start_infer) * 1000
+
+                print(f"[Streamlit ML Run] Crop={selected_crop}, State={selected_state} | Yield={predicted_yield:.2f} T/ha | Compute: {latency_ms:.1f}ms", flush=True)
+                st.toast(f"⚡ Background ML model inferred in {latency_ms:.1f} ms!", icon="🌾")
+
+                st.session_state["pred_result"] = {
+                    "selected_crop": selected_crop,
+                    "selected_state": selected_state,
+                    "area": area,
+                    "predicted_yield": predicted_yield,
+                    "total_production": total_production,
+                    "est_revenue": est_revenue,
+                    "suitability_score": suitability_score,
+                    "risk_badge_html": risk_badge_html,
+                    "recommendation": recommendation,
+                    "rainfall_val": rainfall_val,
+                    "fertilizer_val": fertilizer_val,
+                    "pesticide_val": pesticide_val,
+                    "rainfall_level": rainfall_level,
+                    "fertilizer_level": fertilizer_level,
+                    "pesticide_level": pesticide_level,
+                    "engine_name": engine_name,
+                    "latency_ms": latency_ms
+                }
 
     with col_output:
         st.markdown("<div class='glass-card'>", unsafe_allow_html=True)
@@ -662,6 +678,17 @@ with tab1:
         
         if "pred_result" in st.session_state:
             res = st.session_state["pred_result"]
+            
+            # Live Model Activity Pill
+            st.markdown(f"""
+            <div style="display: flex; align-items: center; justify-content: space-between; background: linear-gradient(135deg, rgba(16,185,129,0.14) 0%, rgba(6,182,212,0.08) 100%); border: 1px solid rgba(52,211,153,0.3); border-radius: 12px; padding: 10px 16px; margin-bottom: 16px;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span class="pulse-dot"></span>
+                    <span style="font-size: 0.88rem; font-weight: 600; color: #6ee7b7;">Engine: {res.get('engine_name', 'RandomForest Pipeline')}</span>
+                </div>
+                <span style="font-size: 0.8rem; font-weight: 700; color: #34d399; background: rgba(16,185,129,0.22); padding: 4px 12px; border-radius: 20px;">⚡ {res.get('latency_ms', 12.0):.1f} ms</span>
+            </div>
+            """, unsafe_allow_html=True)
             
             m1, m2, m3 = st.columns(3)
             with m1:

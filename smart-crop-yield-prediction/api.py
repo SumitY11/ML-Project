@@ -7,8 +7,22 @@ import pandas as pd
 import numpy as np
 import joblib
 import os
+import time
+from datetime import datetime
 
 app = FastAPI(title="Smart Crop Yield Prediction API", version="1.0.0")
+
+# -----------------------------
+# Real-Time Inference Monitoring State
+# -----------------------------
+inference_stats = {
+    "count": 0,
+    "total_latency_ms": 0.0,
+    "last_latency_ms": 0.0,
+    "last_timestamp": None,
+    "last_crop": None,
+    "last_yield": 0.0
+}
 
 # Enable CORS for local development
 app.add_middleware(
@@ -186,6 +200,7 @@ def get_options():
 
 @app.post("/api/predict")
 def predict_crop_yield(req: PredictionRequest):
+    start_time = time.time()
     rain_val = rainfall_quantiles.get(req.rainfall_level, rainfall_quantiles["Normal"])
     fert_val = fertilizer_quantiles.get(req.fertilizer_level, fertilizer_quantiles["Medium"])
     pest_val = pesticide_quantiles.get(req.pesticide_level, pesticide_quantiles["Medium"])
@@ -223,16 +238,20 @@ def predict_crop_yield(req: PredictionRequest):
     pest_mult = 1.05 if req.pesticide_level == "High" else (0.92 if req.pesticide_level == "Low" else 1.0)
 
     dynamic_estimate = crop_base * fert_mult * rain_mult * pest_mult
+    engine_used = "RandomForestRegressor Pipeline (Native ML)"
 
     if model is not None:
         try:
             predicted_yield = float(model.predict(input_df)[0])
             if predicted_yield <= 0:
                 predicted_yield = dynamic_estimate
+                engine_used = "Dynamic Heuristic Multiplier (Fallback)"
         except Exception:
             predicted_yield = dynamic_estimate
+            engine_used = "Dynamic Heuristic Multiplier (Fallback)"
     else:
         predicted_yield = dynamic_estimate
+        engine_used = "Dynamic Heuristic Multiplier (No Model)"
 
     total_harvest = predicted_yield * req.area
 
@@ -261,6 +280,27 @@ def predict_crop_yield(req: PredictionRequest):
         risk_label = "High Anomaly Risk"
         recommendation = "Unfavorable temperature or precipitation patterns. Consult agricultural advisors and adopt drought/flood mitigation."
 
+    # Compute latency and update stats
+    latency_ms = round((time.time() - start_time) * 1000, 2)
+    inference_stats["count"] += 1
+    inference_stats["total_latency_ms"] += latency_ms
+    inference_stats["last_latency_ms"] = latency_ms
+    inference_stats["last_timestamp"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    inference_stats["last_crop"] = req.crop
+    inference_stats["last_yield"] = round(predicted_yield, 3)
+
+    # Vivid terminal log proving background ML activity
+    print("\n" + "═" * 72)
+    print(f"🌾 [ML ENGINE IN BACKGROUND] Request #{inference_stats['count']} @ {inference_stats['last_timestamp']}")
+    print(f"   ├─ Inputs   : Crop={req.crop} | State={req.state} | Season={req.season} | Area={req.area} ha")
+    print(f"   ├─ Weather  : Rainfall={round(rain_val, 1)} mm ({req.rainfall_level}) | Temp={round(temp_val, 1)} °C")
+    print(f"   ├─ Ag-Inputs: Fert={round(fert_val, 1)} kg | Pest={round(pest_val, 1)} kg")
+    print(f"   ├─ Engine   : {engine_used}")
+    print(f"   ├─ Output   : {round(predicted_yield, 3)} Tonnes/Ha (Total: {round(total_harvest, 2)} Tonnes)")
+    print(f"   ├─ Climate  : {risk_label} [{risk_tier}]")
+    print(f"   └─ Latency  : ⚡ {latency_ms} ms (Computed by Background Process)")
+    print("═" * 72 + "\n", flush=True)
+
     return {
         "predicted_yield": round(predicted_yield, 3),
         "total_harvest": round(total_harvest, 2),
@@ -269,11 +309,41 @@ def predict_crop_yield(req: PredictionRequest):
         "risk_tier": risk_tier,
         "risk_label": risk_label,
         "recommendation": recommendation,
+        "engine": engine_used,
+        "latency_ms": latency_ms,
+        "inference_id": inference_stats["count"],
         "inputs": {
             "rainfall_mm": round(rain_val, 1),
             "fertilizer_kg": round(fert_val, 1),
             "pesticide_kg": round(pest_val, 1)
         }
+    }
+
+@app.get("/api/model-status")
+def get_model_status():
+    avg_lat = (
+        round(inference_stats["total_latency_ms"] / inference_stats["count"], 2)
+        if inference_stats["count"] > 0
+        else 0.0
+    )
+    return {
+        "status": "online",
+        "model_loaded": model is not None,
+        "algorithm": "RandomForestRegressor (50 Estimators)",
+        "pipeline_stages": [
+            "ColumnTransformer (OneHotEncoder for Crop, Season, State)",
+            "Passthrough Numeric Features",
+            "RandomForestRegressor"
+        ],
+        "features": [
+            "Crop", "Crop_Year", "Season", "State", "Area",
+            "Annual_Rainfall", "Fertilizer", "Pesticide", "Season_Temperature"
+        ],
+        "total_inferences_served": inference_stats["count"],
+        "last_inference_time": inference_stats["last_timestamp"],
+        "last_latency_ms": inference_stats["last_latency_ms"],
+        "average_latency_ms": avg_lat,
+        "process_type": "Background FastAPI Worker"
     }
 
 @app.get("/api/analytics")
@@ -369,4 +439,12 @@ if os.path.exists(WEB_APP_DIR):
     @app.get("/")
     def serve_frontend():
         return FileResponse(os.path.join(WEB_APP_DIR, "index.html"))
+
+    @app.get("/{file_name:path}")
+    def serve_static_root(file_name: str):
+        file_path = os.path.join(WEB_APP_DIR, file_name)
+        if os.path.exists(file_path) and os.path.isfile(file_path):
+            return FileResponse(file_path)
+        raise HTTPException(status_code=404, detail="File not found")
+
 

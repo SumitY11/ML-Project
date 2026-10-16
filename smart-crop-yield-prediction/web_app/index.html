@@ -161,6 +161,20 @@
 
                     <!-- Output Column -->
                     <div class="output-column">
+                        <!-- Background ML Status Banner -->
+                        <div class="ml-status-banner">
+                            <div class="ml-status-left">
+                                <span class="status-pulse-dot" id="status-pulse-dot"></span>
+                                <div class="ml-status-text">
+                                    <span class="ml-status-title" id="model-source-badge">ML Engine: RandomForest Pipeline</span>
+                                    <span class="ml-status-sub" id="model-subtext">Active in background • Ready for inference</span>
+                                </div>
+                            </div>
+                            <div class="ml-status-right">
+                                <span class="latency-tag" id="inference-latency-tag">⚡ Ready</span>
+                            </div>
+                        </div>
+
                         <!-- Key Metrics Row -->
                         <div class="metrics-grid">
                             <div class="metric-card glass-card">
